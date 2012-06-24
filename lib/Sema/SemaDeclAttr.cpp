@@ -21,6 +21,8 @@
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
 #include "llvm/ADT/StringExtras.h"
+#include "clang/Basic/Wak.h"
+
 using namespace clang;
 using namespace sema;
 
@@ -1371,6 +1373,25 @@ static void HandleWeakAttr(Decl *d, const AttributeList &attr, Sema &S) {
   nd->addAttr(::new (S.Context) WeakAttr(attr.getLoc(), S.Context));
 }
 
+/* wak: 'ecc' attibuteをハンドルする
+ *
+ *   'ecc'が付いていることを，Declに記憶する．
+ *   現状，VarDeclかFieldDecl（構造体メンバ）で使われたときのみ処理するようにしている．
+ *   それ以外の場合，エラーメッセージを出す．
+ */
+#include <cstdio>
+#include <stdlib.h>
+static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
+  if (!isa<VarDecl>(d) && !isa<FieldDecl>(d)) {
+    fprintf(stderr, "wak: ECC attribute found, but '%s' is not VarDecl or FieldDecl !!\n",
+            d->getDeclKindName());
+    return;
+  }
+  NamedDecl *nd = cast<NamedDecl>(d);
+  nd->addAttr(::new (S.Context) EccAttr(attr.getLoc(), S.Context));
+  debugPrintEccMarkAttachedToDecl(S.Context, *nd, "Declaration");
+}
+
 static void HandleWeakImportAttr(Decl *D, const AttributeList &Attr, Sema &S) {
   // check the attribute arguments.
   if (Attr.getNumArgs() != 0) {
@@ -2716,6 +2737,7 @@ static void ProcessNonInheritableDeclAttr(Scope *scope, Decl *D,
   }
 }
 
+// wak: __attribute__のハンドラを呼び出す
 static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
                                        const AttributeList &Attr, Sema &S) {
   switch (Attr.getKind()) {
@@ -2803,6 +2825,8 @@ static void ProcessInheritableDeclAttr(Scope *scope, Decl *D,
   case AttributeList::AT_visibility:  HandleVisibilityAttr  (D, Attr, S); break;
   case AttributeList::AT_warn_unused_result: HandleWarnUnusedResult(D,Attr,S);
     break;
+  // wak: 'ecc' attribute のハンドラを呼び出す
+  case AttributeList::AT_ecc:         HandleEccAttr         (D, Attr, S); break;
   case AttributeList::AT_weak:        HandleWeakAttr        (D, Attr, S); break;
   case AttributeList::AT_weakref:     HandleWeakRefAttr     (D, Attr, S); break;
   case AttributeList::AT_weak_import: HandleWeakImportAttr  (D, Attr, S); break;

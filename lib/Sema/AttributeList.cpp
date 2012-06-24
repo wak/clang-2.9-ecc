@@ -44,6 +44,7 @@ AttributeList::Kind AttributeList::getKind(const IdentifierInfo *Name) {
     AttrName = AttrName.substr(2, AttrName.size() - 4);
 
   return llvm::StringSwitch<AttributeList::Kind>(AttrName)
+    .Case("ecc", AT_ecc)        // wak: add relation 'ecc' attribute to AT_ecc
     .Case("weak", AT_weak)
     .Case("weakref", AT_weakref)
     .Case("pure", AT_pure)

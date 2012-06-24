@@ -102,6 +102,7 @@ public:
     AT_device,
     AT_dllexport,
     AT_dllimport,
+    AT_ecc,                     // wak: add 'ecc' kind
     AT_ext_vector_type,
     AT_fastcall,
     AT_format,
