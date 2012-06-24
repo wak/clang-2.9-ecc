@@ -125,7 +125,9 @@ namespace clang {
         Ctx.getInlineAsmDiagnosticHandler();
       void *OldContext = Ctx.getInlineAsmDiagnosticContext();
       Ctx.setInlineAsmDiagnosticHandler(InlineAsmDiagHandler, this);
-
+      // wak: ここから先でAsmWriterが呼ばれている
+      // wak: Diags: エラー取得用, CodeGenOps: どのように最適化されたか，また，バックエンドに渡されたか．
+      // wak: TargetOpts: ターゲットの情報（CPU, ABIなど）, Action: BackendAction．どんな形式で出力するか
       EmitBackendOutput(Diags, CodeGenOpts, TargetOpts,
                         TheModule.get(), Action, AsmOutStream);
       

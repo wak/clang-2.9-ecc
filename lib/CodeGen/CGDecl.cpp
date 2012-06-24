@@ -26,6 +26,8 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Type.h"
+#include "clang/Basic/Wak.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -105,11 +107,12 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
 /// EmitVarDecl - This method handles emission of any variable declaration
 /// inside a function, including static vars etc.
 void CodeGenFunction::EmitVarDecl(const VarDecl &D) {
+  // wak: 変数定義
   switch (D.getStorageClass()) {
   case SC_None:
   case SC_Auto:
   case SC_Register:
-    return EmitAutoVarDecl(D);
+    return EmitAutoVarDecl(D);  // wak: ローカル変数
   case SC_Static: {
     llvm::GlobalValue::LinkageTypes Linkage = 
       llvm::GlobalValue::InternalLinkage;
@@ -123,7 +126,7 @@ void CodeGenFunction::EmitVarDecl(const VarDecl &D) {
       if (llvm::GlobalValue::isWeakForLinker(CurFn->getLinkage()))
         Linkage = CurFn->getLinkage();
     
-    return EmitStaticVarDecl(D, Linkage);
+    return EmitStaticVarDecl(D, Linkage); // wak: 静的ローカル変数
   }
   case SC_Extern:
   case SC_PrivateExtern:
@@ -165,6 +168,7 @@ static std::string GetStaticDeclName(CodeGenFunction &CGF, const VarDecl &D,
   return ContextName + Separator + D.getNameAsString();
 }
 
+// wak: 静的グローバル変数
 llvm::GlobalVariable *
 CodeGenFunction::CreateStaticVarDecl(const VarDecl &D,
                                      const char *Separator,
@@ -241,12 +245,20 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
   return GV;
 }
 
+/* wak: 静的ローカル変数 (static local variable)
+ *  void f(void) { static int static_local_var; }
+ */
 void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
                                       llvm::GlobalValue::LinkageTypes Linkage) {
   llvm::Value *&DMEntry = LocalDeclMap[&D];
   assert(DMEntry == 0 && "Decl already exists in localdeclmap!");
 
   llvm::GlobalVariable *GV = CreateStaticVarDecl(D, ".", Linkage);
+  // wak: 静的ローカル変数にECC情報を追加
+  if (D.doesThisDeclShouldEccProtect()) {
+    GV->isecc = true;
+    debugPrintEccMarkAttachedToDecl(getContext(), D, "StaticLocalVariable");
+  }
 
   // Store into LocalDeclMap before generating initializer to handle
   // circular references.
@@ -610,9 +622,10 @@ void CodeGenFunction::EmitAutoVarDecl(const VarDecl &D) {
 
 /// EmitAutoVarAlloca - Emit the alloca and debug information for a
 /// local variable.  Does not emit initalization or destruction.
+/// wak: 自動変数の確保 (local variable)
 CodeGenFunction::AutoVarEmission
 CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
-  QualType Ty = D.getType();
+  QualType Ty = D.getType();  // wak: 型を取得（Ty.getAsString()で名前が分かる）
 
   AutoVarEmission emission(D);
 
@@ -681,9 +694,13 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
       } else {
         if (isByRef)
           LTy = BuildByRefType(&D);
-        
-        llvm::AllocaInst *Alloc = CreateTempAlloca(LTy);
-        Alloc->setName(D.getNameAsString());
+
+        llvm::AllocaInst *Alloc = CreateTempAlloca(LTy); // wak: AllocaInstを作成して
+        Alloc->setName(D.getNameAsString());             // wak: 変数名を設定する
+        if (D.doesThisDeclShouldEccProtect()) {          // wak: ローカル変数にECC情報を追加する
+          Alloc->isecc = true;
+          debugPrintEccMarkAttachedToDecl(getContext(), D, "AllocaInst");
+        }
 
         CharUnits allocaAlignment = alignment;
         if (isByRef)

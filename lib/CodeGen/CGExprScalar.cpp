@@ -457,6 +457,11 @@ public:
   Value *VisitBin ## OP ## Assign(const CompoundAssignOperator *E) {       \
     return EmitCompoundAssign(E, &ScalarExprEmitter::Emit ## OP);          \
   }
+  /* wak:
+   *  展開されるVisitBin<OP>Assignに展開される．
+   *  VisitBinAdd, VisitBinAddAssign など
+   *  ただし，結果的には，Emit<OP>かEmitCompoundAssign()が呼ばれる
+   */
   HANDLEBINOP(Mul)
   HANDLEBINOP(Div)
   HANDLEBINOP(Rem)
@@ -1626,7 +1631,7 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
                                     E->getComputationLHSType());
   
   // Expand the binary operator.
-  Result = (this->*Func)(OpInfo);
+  Result = (this->*Func)(OpInfo);            // wak: ここでEmitAdd()などが呼ばれる
   
   // Convert the result back to the LHS type.
   Result = EmitScalarConversion(Result, E->getComputationResultType(), LHSTy);
@@ -2239,8 +2244,8 @@ Value *ScalarExprEmitter::VisitBinAssign(const BinaryOperator *E) {
 
   // __block variables need to have the rhs evaluated first, plus this should
   // improve codegen just a little.
-  Value *RHS = Visit(E->getRHS());
-  LValue LHS = EmitCheckedLValue(E->getLHS());
+  Value *RHS = Visit(E->getRHS());             // wak:  var =   [100 + 20]
+  LValue LHS = EmitCheckedLValue(E->getLHS()); // wak: [var = ]  100 + 20
 
   // Store the value into the LHS.  Bit-fields are handled specially
   // because the result is altered by the store, i.e., [C99 6.5.16p1]
@@ -2250,7 +2255,7 @@ Value *ScalarExprEmitter::VisitBinAssign(const BinaryOperator *E) {
     CGF.EmitStoreThroughBitfieldLValue(RValue::get(RHS), LHS, E->getType(),
                                        &RHS);
   else
-    CGF.EmitStoreThroughLValue(RValue::get(RHS), LHS, E->getType());
+    CGF.EmitStoreThroughLValue(RValue::get(RHS), LHS, E->getType()); // wak: ここで出力？
 
   // If the result is clearly ignored, return now.
   if (Ignore)

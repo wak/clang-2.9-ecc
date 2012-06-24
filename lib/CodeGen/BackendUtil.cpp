@@ -308,7 +308,7 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action, raw_ostream *OS) {
     getPerModulePasses()->add(createBitcodeWriterPass(*OS));
     break;
 
-  case Backend_EmitLL:
+  case Backend_EmitLL:                       // wak: IRを出力するために，ここでパスが追加される
     FormattedOS.setStream(*OS, formatted_raw_ostream::PRESERVE_STREAM);
     getPerModulePasses()->add(createPrintModulePass(&FormattedOS));
     break;
@@ -333,7 +333,7 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action, raw_ostream *OS) {
     PerFunctionPasses->doFinalization();
   }
 
-  if (PerModulePasses) {
+  if (PerModulePasses) {                     // wak: IR出力
     PrettyStackTraceString CrashInfo("Per-module optimization passes");
     PerModulePasses->run(*TheModule);
   }

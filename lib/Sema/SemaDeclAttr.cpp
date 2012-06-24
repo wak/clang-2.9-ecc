@@ -1382,7 +1382,9 @@ static void HandleWeakAttr(Decl *d, const AttributeList &attr, Sema &S) {
 #include <cstdio>
 #include <stdlib.h>
 static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
-  if (!isa<VarDecl>(d) && !isa<FieldDecl>(d)) {
+  if (!isa<VarDecl>(d)    &&    // Variable
+      !isa<RecordDecl>(d) &&    // Struct
+      !isa<FieldDecl>(d)) {     // Struct member
     fprintf(stderr, "wak: ECC attribute found, but '%s' is not VarDecl or FieldDecl !!\n",
             d->getDeclKindName());
     return;

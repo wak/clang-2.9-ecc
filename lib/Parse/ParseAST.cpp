@@ -41,6 +41,10 @@ void clang::ParseAST(Preprocessor &PP, ASTConsumer *Consumer,
   ParseAST(S, PrintStats);
 }
 
+/* wak: プリプロセッサ -> 構文解析 -> 意味解析- > 中間コード生成(CodeGen)をする
+ *
+ *   プログラムをパースして，なんらかの処理（コード生成やASTダンプなど）を行う．
+ */
 void clang::ParseAST(Sema &S, bool PrintStats) {
   // Collect global stats on Decls/Stmts (until we have a module streamer).
   if (PrintStats) {
@@ -59,13 +63,18 @@ void clang::ParseAST(Sema &S, bool PrintStats) {
     External->StartTranslationUnit(Consumer);
   
   Parser::DeclGroupPtrTy ADecl;
-  
+  // wak: 一つ一つ，パースして処理する
+  // wak: ParseTopLevelDecl()で，構文解析＋意味解析
   while (!P.ParseTopLevelDecl(ADecl)) {  // Not end of file.
     // If we got a null return and something *was* parsed, ignore it.  This
     // is due to a top-level semicolon, an action override, or a parse error
     // skipping something.
-    if (ADecl)
+
+    // wak: 準備が出来たから，中間コードに変換する
+    if (ADecl) {
+      // wak: この先でCodeGenが実行されている
       Consumer->HandleTopLevelDecl(ADecl.get());
+    }
   };
   // Check for any pending objective-c implementation decl.
   while ((ADecl = P.FinishPendingObjCActions()))
@@ -76,7 +85,8 @@ void clang::ParseAST(Sema &S, bool PrintStats) {
        I = S.WeakTopLevelDecls().begin(),
        E = S.WeakTopLevelDecls().end(); I != E; ++I)
     Consumer->HandleTopLevelDecl(DeclGroupRef(*I));
-  
+
+  // wak: ここから先でAsmWriterがよばれている．他のパスも呼ばれてるっぽい？
   Consumer->HandleTranslationUnit(S.getASTContext());
   
   if (PrintStats) {

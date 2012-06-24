@@ -332,6 +332,7 @@ static void TryMarkNoThrow(llvm::Function *F) {
   F->setDoesNotThrow(true);
 }
 
+// wak: グローバル関数のコード生成
 void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
   
@@ -366,8 +367,10 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn) {
     EmitDestructorBody(Args);
   else if (isa<CXXConstructorDecl>(FD))
     EmitConstructorBody(Args);
-  else
+  else {
+    // wak: 関数の中身をEmitする
     EmitFunctionBody(Args);
+  }
 
   // Emit the standard function epilogue.
   FinishFunction(BodyRange.getEnd());

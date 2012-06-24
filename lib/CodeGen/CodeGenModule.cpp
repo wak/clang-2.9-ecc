@@ -41,6 +41,8 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "clang/Basic/Wak.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -686,6 +688,13 @@ llvm::Constant *CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
   return Aliasee;
 }
 
+/* wak: すべての定義はここからEmitされる．
+ *  - Function
+ *    - 関数宣言・定義
+ *  - Var
+ *    - グローバル変数宣言・定義
+ *    - static変数定義
+ */
 void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   const ValueDecl *Global = cast<ValueDecl>(GD.getDecl());
 
@@ -734,6 +743,8 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   // function etc.  These we only want to emit if they are used.
   if (!MayDeferGeneration(Global)) {
     // Emit the definition if it can't be deferred.
+    // wak: 先延ばしにできない定義をEmitする．
+    // wak: 重要なのはここ．他は，weakシンボルとかの例外的なやつだとおもう．
     EmitGlobalDefinition(GD);
     return;
   }
@@ -759,6 +770,16 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   }
 }
 
+/* wak:
+ *
+ *  グローバルな定義は，大半がここから．
+ *  当分はここを見ればよい．
+ *
+ *  処理の流れとしては，
+ *    Function: EmitGlobalFunctionDefinition()
+ *    Var: EmitGlobalVarDefinition()
+ *  の二つ．
+ */
 void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
   const ValueDecl *D = cast<ValueDecl>(GD.getDecl());
 
@@ -769,6 +790,12 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
   if (const FunctionDecl *Function = dyn_cast<FunctionDecl>(D)) {
     // At -O0, don't generate IR for functions with available_externally 
     // linkage.
+    /* wak:
+     *
+     *   AvailableExternallyLinkageがなにかわからないけど，
+     *   なにもEmitしないようだから，今は気にしなくてもよいでしょう．
+     *   extern void f(void); とかだろうか？（実際，.sには出ないし．）
+     */
     if (CodeGenOpts.OptimizationLevel == 0 && 
         !Function->hasAttr<AlwaysInlineAttr>() &&
         getFunctionLinkage(Function) 
@@ -786,9 +813,11 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
         return EmitCXXDestructor(DD, GD.getDtorType());
     }
 
+    // wak: グローバル関数定義
     return EmitGlobalFunctionDefinition(GD);
   }
-  
+
+  // wak: グローバル変数 & staticグローバル変数定義
   if (const VarDecl *VD = dyn_cast<VarDecl>(D))
     return EmitGlobalVarDefinition(VD);
   
@@ -1168,6 +1197,7 @@ CharUnits CodeGenModule::GetTargetTypeStoreSize(const llvm::Type *Ty) const {
       TheTargetData.getTypeStoreSizeInBits(Ty));
 }
 
+// wak: 静的グローバル変数・グローバル変数定義 (static global variable, global variable)
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   llvm::Constant *Init = 0;
   QualType ASTTy = D->getType();
@@ -1190,6 +1220,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
   } else {
     Init = EmitConstantExpr(InitExpr, D->getType());       
     if (!Init) {
+      // wak: C++で，int var = func();とか書くと来る？
       QualType T = InitExpr->getType();
       if (D->getType()->isReferenceType())
         T = D->getType();
@@ -1202,6 +1233,10 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
         Init = llvm::UndefValue::get(getTypes().ConvertType(T));
       }
     } else {
+      /* wak: 初期化が必要な場合はこちら．
+       *   int i = 100;
+       *   int i = 100 + 10;
+       */
       // We don't need an initializer, so remove the entry for the delayed
       // initializer position (just in case this entry was delayed).
       if (getLangOptions().CPlusPlus)
@@ -1222,6 +1257,13 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // Entry is now either a Function or GlobalVariable.
   llvm::GlobalVariable *GV = dyn_cast<llvm::GlobalVariable>(Entry);
+  // wak: グローバル変数にECC情報を追加する
+  if (D->doesThisDeclShouldEccProtect()) {
+    GV->isecc = true;
+    debugPrintEccMarkAttachedToDecl(Context, *D,
+                                    D->isFileVarDecl() && (D->getStorageClass() == SC_Static) ?
+                                    "StaticGlobalVariable" : "GlobalVariable");
+  }
 
   // We have a definition after a declaration with the wrong type.
   // We must make a new GlobalVariable* and update everything that used OldGV
@@ -1388,7 +1430,7 @@ static void ReplaceUsesOfNonProtoTypeWithRealFunction(llvm::GlobalValue *Old,
   }
 }
 
-
+// wak: グローバル関数の定義をEmitする
 void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
   const FunctionDecl *D = cast<FunctionDecl>(GD.getDecl());
   const llvm::FunctionType *Ty = getTypes().GetFunctionType(GD);
@@ -1451,6 +1493,12 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD) {
   // FIXME: this is redundant with part of SetFunctionDefinitionAttributes
   setGlobalVisibility(Fn, D);
 
+  /* wak: ここ重要
+   *  CodeGenFunction::CodeGenFunction(CodeGenModule &cgm) [lib/CodeGen/CodeGenFunction.cpp:41]
+   *  Globalで引っかからない…
+   *
+   *  GenerateCode()は，一発で見つかるやつ．
+   */
   CodeGenFunction(*this).GenerateCode(D, Fn);
 
   SetFunctionDefinitionAttributes(D, Fn);
@@ -1988,6 +2036,18 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
   // Ignore dependent declarations.
   if (D->getDeclContext() && D->getDeclContext()->isDependentContext())
     return;
+
+  // wak
+  switch (D->getKind()) {
+  case Decl::Var:
+  case Decl::Record:
+  case Decl::Typedef:
+  case Decl::Function:
+  case Decl::Enum:
+    break;
+  default:
+    fprintf(stderr, "wak: EmitTopLevelDecl unknown decl kind: '%s'\n", D->getDeclKindName());
+  }
 
   switch (D->getKind()) {
   case Decl::CXXConversion:
