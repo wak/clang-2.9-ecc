@@ -1384,14 +1384,33 @@ static void HandleWeakAttr(Decl *d, const AttributeList &attr, Sema &S) {
 static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
   if (!isa<VarDecl>(d)    &&    // Variable
       !isa<RecordDecl>(d) &&    // Struct
-      !isa<FieldDecl>(d)) {     // Struct member
-    fprintf(stderr, "wak: ECC attribute found, but '%s' is not VarDecl or FieldDecl !!\n",
+      !isa<FieldDecl>(d)  &&    // Struct member
+      !isa<TypedefDecl>(d)) {   // Typedef
+    fprintf(stderr, "wak: ECC attribute found, but '%s' is not "
+            "VarDecl, FieldDecl, RecordDecl, or TypedefDecl !!\n",
             d->getDeclKindName());
     return;
   }
   NamedDecl *nd = cast<NamedDecl>(d);
   nd->addAttr(::new (S.Context) EccAttr(attr.getLoc(), S.Context));
+
   debugPrintEccMarkAttachedToDecl(S.Context, *nd, "Declaration");
+
+  const char *type_name = NULL;
+  if (isa<DeclaratorDecl>(d))
+    type_name = cast<DeclaratorDecl>(d)->getTypeSourceInfo()->getType().getAsString().c_str();
+  if (isa<TypedefDecl>(d))
+    type_name = cast<TypedefDecl>(d)->getTypeSourceInfo()->getType().getAsString().c_str();
+  if (type_name)
+    fprintf(stderr, "     wak: Add ecc to type as '%s'\n", type_name);
+
+  // if (isa<TypedefDecl>(d)) {
+  //   TypedefDecl *decl = cast<TypedefDecl>(d);
+  //   while ((decl = decl->getCanonicalDecl()) != NULL) {
+  //     type_name = cast<TypedefDecl>(d)->getTypeSourceInfo()->getType().getAsString().c_str();
+  //     fprintf(stderr, "     wak: canonical decl: '%s'\n", type_name);
+  //   }
+  // }
 }
 
 static void HandleWeakImportAttr(Decl *D, const AttributeList &Attr, Sema &S) {
