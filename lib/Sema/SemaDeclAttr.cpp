@@ -1381,7 +1381,14 @@ static void HandleWeakAttr(Decl *d, const AttributeList &attr, Sema &S) {
  */
 #include <cstdio>
 #include <stdlib.h>
-static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
+static void HandleEccAttr(Decl *d, const AttributeList &Attr, Sema &S) {
+  // ecc属性の引数は，0〜1個
+  if (Attr.getNumArgs() > 1) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments) << 1;
+    return;
+  }
+
+  // サポートしている宣言かチェック
   if (!isa<VarDecl>(d)    &&    // Variable
       !isa<RecordDecl>(d) &&    // Struct
       !isa<FieldDecl>(d)  &&    // Struct member
@@ -1391,10 +1398,24 @@ static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
             d->getDeclKindName());
     return;
   }
-  NamedDecl *nd = cast<NamedDecl>(d);
-  nd->addAttr(::new (S.Context) EccAttr(attr.getLoc(), S.Context));
 
-  debugPrintEccMarkAttachedToDecl(S.Context, *nd, "Declaration");
+  NamedDecl *nd = cast<NamedDecl>(d);
+  int referenceLevel = 0;
+
+  if (Attr.getNumArgs() > 0) {
+    Expr *E = Attr.getArg(0);
+    llvm::APSInt Idx(32);
+    if (E->isTypeDependent() || E->isValueDependent() ||
+        !E->isIntegerConstantExpr(Idx, S.Context)) {
+      S.Diag(Attr.getLoc(), diag::err_attribute_argument_n_not_int)
+        << "ecc" << 1 << E->getSourceRange();
+      return;
+    }
+    referenceLevel = Idx.getZExtValue();
+  }
+  nd->addAttr(::new (S.Context) EccAttr(Attr.getLoc(), S.Context, referenceLevel));
+
+  debugPrintEccMarkAttachedToDecl(S.Context, *nd, "Declaration", referenceLevel);
 
   const char *type_name = NULL;
   if (isa<DeclaratorDecl>(d))
@@ -1403,14 +1424,6 @@ static void HandleEccAttr(Decl *d, const AttributeList &attr, Sema &S) {
     type_name = cast<TypedefDecl>(d)->getTypeSourceInfo()->getType().getAsString().c_str();
   if (type_name)
     fprintf(stderr, "     wak: Add ecc to type as '%s'\n", type_name);
-
-  // if (isa<TypedefDecl>(d)) {
-  //   TypedefDecl *decl = cast<TypedefDecl>(d);
-  //   while ((decl = decl->getCanonicalDecl()) != NULL) {
-  //     type_name = cast<TypedefDecl>(d)->getTypeSourceInfo()->getType().getAsString().c_str();
-  //     fprintf(stderr, "     wak: canonical decl: '%s'\n", type_name);
-  //   }
-  // }
 }
 
 static void HandleWeakImportAttr(Decl *D, const AttributeList &Attr, Sema &S) {

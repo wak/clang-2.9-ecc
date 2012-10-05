@@ -409,6 +409,7 @@ def Pure : InheritableAttr {
 // wak: add 'ecc' attribute
 def Ecc : InheritableAttr {
   let Spellings = ["ecc"];
+  let Args = [DefaultIntArgument<"ReferenceLevel", 0>];
 }
 
 def Regparm : InheritableAttr {

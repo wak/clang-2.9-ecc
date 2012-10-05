@@ -698,11 +698,8 @@ protected:
   virtual VarDecl *getNextRedeclaration() { return RedeclLink.getNext(); }
 
 public:
-  // wak: この変数の型がECCで保護されているか？
-  bool isThisTypeEccProtected() const;
-
   // wak: この変数定義をECC保護すべきか？
-  bool doesThisDeclShouldEccProtect() const;
+  const EccAttr *getEccAttr() const;
 
   typedef redeclarable_base::redecl_iterator redecl_iterator;
   redecl_iterator redecls_begin() const {

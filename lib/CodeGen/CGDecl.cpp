@@ -254,11 +254,10 @@ void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
   assert(DMEntry == 0 && "Decl already exists in localdeclmap!");
 
   llvm::GlobalVariable *GV = CreateStaticVarDecl(D, ".", Linkage);
+
+
   // wak: 静的ローカル変数にECC情報を追加
-  if (D.doesThisDeclShouldEccProtect()) {
-    GV->isecc = true;
-    debugPrintEccMarkAttachedToDecl(getContext(), D, "StaticLocalVariable");
-  }
+  attachEccMarkToIRIfEccAttrSpecified(GV, D, getContext(), "StaticLocalVariable");
 
   // Store into LocalDeclMap before generating initializer to handle
   // circular references.
@@ -697,10 +696,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
         llvm::AllocaInst *Alloc = CreateTempAlloca(LTy); // wak: AllocaInstを作成して
         Alloc->setName(D.getNameAsString());             // wak: 変数名を設定する
-        if (D.doesThisDeclShouldEccProtect()) {          // wak: ローカル変数にECC情報を追加する
-          Alloc->isecc = true;
-          debugPrintEccMarkAttachedToDecl(getContext(), D, "AllocaInst");
-        }
+        attachEccMarkToIRIfEccAttrSpecified(Alloc, D, getContext(), "AllocaInst"); // wak: ローカル変数にECC情報を追加する
 
         CharUnits allocaAlignment = alignment;
         if (isByRef)
@@ -1056,6 +1052,9 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, llvm::Value *Arg,
                       getContext().getDeclAlign(&D).getQuantity(), Ty,
                       CGM.getTBAAInfo(Ty));
   }
+
+  // wak: 関数の引数にECC情報を追加する
+  attachEccMarkToIRIfEccAttrSpecified(DeclPtr, D, getContext(), "Argument");
 
   llvm::Value *&DMEntry = LocalDeclMap[&D];
   assert(DMEntry == 0 && "Decl already exists in localdeclmap!");

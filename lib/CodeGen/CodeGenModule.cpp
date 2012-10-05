@@ -1257,13 +1257,11 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // Entry is now either a Function or GlobalVariable.
   llvm::GlobalVariable *GV = dyn_cast<llvm::GlobalVariable>(Entry);
+
   // wak: グローバル変数にECC情報を追加する
-  if (D->doesThisDeclShouldEccProtect()) {
-    GV->isecc = true;
-    debugPrintEccMarkAttachedToDecl(Context, *D,
-                                    D->isFileVarDecl() && (D->getStorageClass() == SC_Static) ?
-                                    "StaticGlobalVariable" : "GlobalVariable");
-  }
+  attachEccMarkToIRIfEccAttrSpecified(GV, *D, getContext(),
+                                      D->isFileVarDecl() && (D->getStorageClass() == SC_Static) ?
+                                      "StaticGlobalVariable" : "GlobalVariable");
 
   // We have a definition after a declaration with the wrong type.
   // We must make a new GlobalVariable* and update everything that used OldGV
