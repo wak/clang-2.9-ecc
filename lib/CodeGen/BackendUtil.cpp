@@ -121,6 +121,10 @@ void EmitAssemblyHelper::CreatePasses() {
   if (CodeGenOpts.VerifyModule)
     FPM->add(createVerifierPass());
 
+
+  // wak: ECCコード挿入
+  FPM->add(llvm::createWakInsertEccPass(NULL));
+
   // Assume that standard function passes aren't run for -O0.
   if (OptLevel > 0)
     llvm::createStandardFunctionPasses(FPM, OptLevel);
