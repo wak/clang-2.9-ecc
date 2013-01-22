@@ -23,6 +23,8 @@
 #include "llvm/Intrinsics.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/Target/TargetData.h"
+#include "clang/Basic/Wak.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -1123,12 +1125,19 @@ static void setObjCGCLValueClass(const ASTContext &Ctx, const Expr *E,
   }
 }
 
+// wak: extern宣言された変数定義
+// 例: extern int [10];
+//     int[0] = 10;
 static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
                                       const Expr *E, const VarDecl *VD) {
   assert((VD->hasExternalStorage() || VD->isFileVarDecl()) &&
          "Var decl must have external storage or be a file var decl!");
 
   llvm::Value *V = CGF.CGM.GetAddrOfGlobalVar(VD);
+
+  // wak: extern宣言された変数にECC情報を追加
+  attachEccMarkToIRIfEccAttrSpecified(V, *VD, CGF.getContext(), "ExternGlobalVariable");
+
   if (VD->getType()->isReferenceType())
     V = CGF.Builder.CreateLoad(V, "tmp");
   unsigned Alignment = CGF.getContext().getDeclAlign(VD).getQuantity();
